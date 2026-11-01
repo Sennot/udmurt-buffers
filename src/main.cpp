@@ -300,7 +300,6 @@ class $modify(UDMURTPlayer, PlayerObject) {
         m_fields->m_bufferWindow = 0.0f;
         m_fields->m_bufferElapsed = 0.0f;
         this->m_jumpBuffered = false;
-        this->m_hasJustHeld = false;
         this->m_holdingButtons.clear();
     }
 
@@ -347,11 +346,11 @@ class $modify(UDMURTPlayer, PlayerObject) {
         int val = resolveWindowValue(this, t);
         if (val > 0) {
             m_fields->m_bufferWindow = toSeconds(val);
-            if (this->m_jumpBuffered || this->m_isHolding) {
+            if (this->m_jumpBuffered || !this->m_holdingButtons.empty()) {
                 m_fields->m_bufferElapsed += dt;
                 if (m_fields->m_bufferElapsed > m_fields->m_bufferWindow) {
                     this->m_jumpBuffered = false;
-                    this->m_hasJustHeld = false;
+                    this->m_holdingButtons.clear();
                 }
             } else {
                 m_fields->m_bufferElapsed = 0.0f;
