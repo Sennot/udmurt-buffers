@@ -1,5 +1,5 @@
 {
-  "geode": "v5.7.1",
+  "geode": "5.7.1",
   "gd": {
     "win": "2.2081"
   },
@@ -8,14 +8,13 @@
   "version": "v1.1.0",
   "developer": "UDMURT",
   "description": "Fine-grained control over Input Buffer with per-mode and per-click toggles, custom delay windows, and a themed UI.",
-  "repository": "https://github.com/udmurt/udmurt-buffers",
-  "dependencies": [
-    {
-      "id": "lyophi.buffermod",
+  "repository": "https://github.com/Sennot/udmurt-buffers",
+  "dependencies": {
+    "lyophi.buffermod": {
       "version": ">=1.1.0",
-      "required": false
+      "importance": "suggested"
     }
-  ],
+  },
   "settings": {
     "master-enable": {
       "name": "Enable UDMURT Buffers",
@@ -91,7 +90,10 @@
       "name": "Delay Unit",
       "type": "string",
       "default": "frames",
-      "one-of": [ "frames", "ticks" ]
+      "one-of": [
+        "frames",
+        "ticks"
+      ]
     },
     "landing-window": {
       "name": "Landing Window",
@@ -99,7 +101,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "orb-window": {
       "name": "Orb Window",
@@ -107,7 +111,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "min-hold-window": {
       "name": "Min Hold Window",
@@ -115,7 +121,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "min-gap-window": {
       "name": "Min Gap Window",
@@ -123,7 +131,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "grid-window": {
       "name": "Grid Window",
@@ -131,7 +141,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "ship-window": {
       "name": "Ship Override",
@@ -139,7 +151,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "ufo-window": {
       "name": "UFO Override",
@@ -147,7 +161,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "wave-window": {
       "name": "Wave Override",
@@ -155,7 +171,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "swing-window": {
       "name": "Swing Override",
@@ -163,7 +181,9 @@
       "default": 0,
       "min": 0,
       "max": 16,
-      "control": "slider"
+      "control": {
+        "slider": true
+      }
     },
     "fps": {
       "name": "FPS",

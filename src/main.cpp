@@ -3,6 +3,9 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/ui/Popup.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
+#include <Geode/loader/SettingV3.hpp>
+#include <cmath>
+#include <unordered_map>
 
 using namespace geode::prelude;
 
@@ -19,13 +22,19 @@ enum class ClickType {
 };
 
 // ===========================================================================
-// Утилиты (логика буфера — без изменений)
+// Утилиты (логика буфера)
 // ===========================================================================
 namespace {
     inline Mode getMode(PlayerObject* p) {
         if (!p) return Mode::Unknown;
-        int g = static_cast<int>(p->m_gameMode);
-        return (g >= 0 && g <= 7) ? static_cast<Mode>(g) : Mode::Unknown;
+        if (p->m_isShip)   return Mode::Ship;
+        if (p->m_isBall)   return Mode::Ball;
+        if (p->m_isBird)   return Mode::UFO;
+        if (p->m_isDart)   return Mode::Wave;
+        if (p->m_isRobot)  return Mode::Robot;
+        if (p->m_isSpider) return Mode::Spider;
+        if (p->m_isSwing)  return Mode::Swing;
+        return Mode::Cube;
     }
 
     inline bool masterEnabled() {
@@ -70,8 +79,8 @@ namespace {
             return ClickType::Orb;
         auto m = getMode(p);
         if (m == Mode::Wave || m == Mode::Ship || m == Mode::UFO || m == Mode::Swing) {
-            if (auto bufMod = Mod::get("lyophi.buffermod"_spr)) {
-                int style = bufMod->getSettingValue<int>("wave-mode");
+            if (auto bufMod = Loader::get()->getLoadedMod("lyophi.buffermod")) {
+                int style = static_cast<int>(bufMod->getSettingValue<int64_t>("wave-mode"));
                 if (style == 0) return ClickType::MinHold;
                 if (style == 1) return ClickType::MinGap;
                 if (style == 2) return ClickType::Grid;
@@ -84,11 +93,11 @@ namespace {
     inline int getWindowFor(ClickType t) {
         auto mod = Mod::get();
         switch (t) {
-            case ClickType::Landing: return mod->getSettingValue<int>("landing-window");
-            case ClickType::Orb:     return mod->getSettingValue<int>("orb-window");
-            case ClickType::MinHold: return mod->getSettingValue<int>("min-hold-window");
-            case ClickType::MinGap:  return mod->getSettingValue<int>("min-gap-window");
-            case ClickType::Grid:    return mod->getSettingValue<int>("grid-window");
+            case ClickType::Landing: return static_cast<int>(mod->getSettingValue<int64_t>("landing-window"));
+            case ClickType::Orb:     return static_cast<int>(mod->getSettingValue<int64_t>("orb-window"));
+            case ClickType::MinHold: return static_cast<int>(mod->getSettingValue<int64_t>("min-hold-window"));
+            case ClickType::MinGap:  return static_cast<int>(mod->getSettingValue<int64_t>("min-gap-window"));
+            case ClickType::Grid:    return static_cast<int>(mod->getSettingValue<int64_t>("grid-window"));
             default:                 return 0;
         }
     }
@@ -96,10 +105,10 @@ namespace {
     inline int getModeOverride(Mode m) {
         auto mod = Mod::get();
         switch (m) {
-            case Mode::Ship:  return mod->getSettingValue<int>("ship-window");
-            case Mode::UFO:   return mod->getSettingValue<int>("ufo-window");
-            case Mode::Wave:  return mod->getSettingValue<int>("wave-window");
-            case Mode::Swing: return mod->getSettingValue<int>("swing-window");
+            case Mode::Ship:  return static_cast<int>(mod->getSettingValue<int64_t>("ship-window"));
+            case Mode::UFO:   return static_cast<int>(mod->getSettingValue<int64_t>("ufo-window"));
+            case Mode::Wave:  return static_cast<int>(mod->getSettingValue<int64_t>("wave-window"));
+            case Mode::Swing: return static_cast<int>(mod->getSettingValue<int64_t>("swing-window"));
             default:          return 0;
         }
     }
@@ -108,7 +117,7 @@ namespace {
         auto mod = Mod::get();
         bool frames = mod->getSettingValue<std::string>("unit") == "frames";
         if (frames) {
-            int fps = mod->getSettingValue<int>("fps");
+            int fps = static_cast<int>(mod->getSettingValue<int64_t>("fps"));
             if (fps < 1) fps = 60;
             return static_cast<float>(value) / static_cast<float>(fps);
         }
@@ -140,12 +149,14 @@ class UdmurtSettingsPopup : public geode::Popup {
 protected:
     std::unordered_map<int, std::string> m_settingIds;
 
-    bool init() override {
+    bool init() {
         if (!geode::Popup::init(420.f, 360.f))
             return false;
 
-        this->getBG()->setColor(colorBlack());
-        this->getBG()->setOpacity(230);
+        if (m_bgSprite) {
+            m_bgSprite->setColor(colorBlack());
+            m_bgSprite->setOpacity(230);
+        }
         this->setTitle("UDMURT BUFFERS");
 
         auto scroll = ScrollLayer::create({380.f, 280.f});
@@ -208,7 +219,7 @@ protected:
 
         content->setContentSize({380.f, std::abs(y) + 20.f});
         content->setPositionY(scroll->getContentSize().height - content->getContentSize().height);
-        scroll->updateAllPages();
+        scroll->moveToTop();
 
         return true;
     }
@@ -256,7 +267,7 @@ protected:
 
     void onToggle(CCObject* sender) {
         auto toggle = static_cast<CCMenuItemToggler*>(sender);
-        bool newVal = toggle->isToggled();
+        bool newVal = !toggle->isToggled();
         auto it = m_settingIds.find(toggle->getTag());
         if (it != m_settingIds.end()) {
             Mod::get()->setSettingValue<bool>(it->second, newVal);
@@ -280,29 +291,41 @@ public:
 // Хуки PlayerObject и PlayLayer
 // ===========================================================================
 class $modify(UDMURTPlayer, PlayerObject) {
-    void pushButton(PlayerButton button) {
+    struct Fields {
+        float m_bufferWindow = 0.0f;
+        float m_bufferElapsed = 0.0f;
+    };
+
+    void clearBufferState() {
+        m_fields->m_bufferWindow = 0.0f;
+        m_fields->m_bufferElapsed = 0.0f;
+        this->m_jumpBuffered = false;
+        this->m_hasJustHeld = false;
+        this->m_holdingButtons.clear();
+    }
+
+    bool pushButton(PlayerButton button) {
         if (shouldSuppress(this)) {
-            this->m_bufferWindow = 0.0f;
-            this->m_holdingButtons.clear();
+            clearBufferState();
             dbg("pushButton suppressed");
         } else {
             auto t = inferClickType(this);
             int val = resolveWindowValue(this, t);
             if (val > 0) {
-                this->m_bufferWindow = toSeconds(val);
-                dbg(fmt::format("pushButton window={} -> {}s", val, this->m_bufferWindow));
+                m_fields->m_bufferWindow = toSeconds(val);
+                m_fields->m_bufferElapsed = 0.0f;
+                dbg(fmt::format("pushButton window={} -> {}s", val, m_fields->m_bufferWindow));
             }
         }
-        PlayerObject::pushButton(button);
+        return PlayerObject::pushButton(button);
     }
 
-    void releaseButton(PlayerButton button) {
+    bool releaseButton(PlayerButton button) {
         if (shouldSuppress(this)) {
-            this->m_bufferWindow = 0.0f;
-            this->m_holdingButtons.clear();
+            clearBufferState();
             dbg("releaseButton suppressed");
         }
-        PlayerObject::releaseButton(button);
+        return PlayerObject::releaseButton(button);
     }
 
     void update(float dt) {
@@ -311,18 +334,29 @@ class $modify(UDMURTPlayer, PlayerObject) {
 
         auto m = getMode(this);
         if (!isModeEnabled(m)) {
-            this->m_bufferWindow = 0.0f;
+            clearBufferState();
             return;
         }
 
         auto t = inferClickType(this);
         if (!isClickTypeEnabled(t)) {
-            this->m_bufferWindow = 0.0f;
+            clearBufferState();
             return;
         }
 
         int val = resolveWindowValue(this, t);
-        if (val > 0) this->m_bufferWindow = toSeconds(val);
+        if (val > 0) {
+            m_fields->m_bufferWindow = toSeconds(val);
+            if (this->m_jumpBuffered || this->m_isHolding) {
+                m_fields->m_bufferElapsed += dt;
+                if (m_fields->m_bufferElapsed > m_fields->m_bufferWindow) {
+                    this->m_jumpBuffered = false;
+                    this->m_hasJustHeld = false;
+                }
+            } else {
+                m_fields->m_bufferElapsed = 0.0f;
+            }
+        }
     }
 };
 
@@ -334,8 +368,7 @@ class $modify(UDMURTLayer, PlayLayer) {
         for (auto* p : {this->m_player1, this->m_player2}) {
             if (!p) continue;
             if (shouldSuppress(p)) {
-                p->m_bufferWindow = 0.0f;
-                p->m_holdingButtons.clear();
+                static_cast<UDMURTPlayer*>(p)->clearBufferState();
             }
         }
     }
