@@ -1,0 +1,6 @@
+build/
+gd_streamchat/
+.cache/
+.vs/
+.vscode/
+*.geode
